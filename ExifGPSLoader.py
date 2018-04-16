@@ -1,5 +1,6 @@
 import sys
 import numpy as np
+import struct
 import webbrowser
 
 #bigEndian ">"
@@ -11,11 +12,16 @@ class Reader:
         self.data = data
         self.pos = 0
     
-    def read_uint(self, size):
-        #単数値を返すとき. ポインタなど
-        result = np.frombuffer(self.data, dtype=endian+"u"+str(size), offset=self.pos, count=1)[0]
-        self.pos += size
-        return result
+    def read(self, size):
+        if size == 2:
+            result = struct.unpack(endian+"H", self.data[self.pos: self.pos+2])[0]
+            self.pos += 2
+            return result
+
+        elif size == 4:
+            result = struct.unpack(endian+"I", self.data[self.pos: self.pos+4])[0]
+            self.pos += 4
+            return result
     
     def read_str(self, size):
         #ASCii文字列を返すとき. 文字数はバイト数で判断
@@ -24,7 +30,7 @@ class Reader:
         return result
     
     def read_uint_tuple(self, size, num):
-        #複数値でtupleを返すとき. short,long
+        #複数値の配列を返すとき. short,long
         result = np.frombuffer(self.data, dtype=endian+"u"+str(size), offset=self.pos, count=num)
         self.pos += size
         return result
@@ -52,28 +58,33 @@ def GPS(pointer, reader):
     print("---GPS infomation was found!---")
 
     reader.set_pos(pointer)
-    tag_n = reader.read_uint(2) #tag amount
+    tag_n = reader.read(2) #tag amount
     for i in range(tag_n):
-        tag = reader.read_uint(2) #tag
-        _type = reader.read_uint(2) #type
-        value = reader.read_uint(4) #value
-        value_offset = reader.read_uint(4) #value or offset
+        tag = reader.read(2) #tag
+        _type = reader.read(2) #type
+        value = reader.read(4) #value
+        value_offset = reader.read(4) #value or offset
         #print (t, end="")
         #print (" ... ", end="")
 
         cur = reader.get_pos()
         tag = tag
         if tag == 0:
-            ver = np.frombuffer(value_offset, dtype=endian+"u"+str(1), offset=0, count=value)
+            if endian == ">":
+                en = "big"
+            else:
+                en = "little"
+            
+            ver = np.frombuffer(value_offset.to_bytes(value, en), dtype=endian+"u1", offset=0, count=value)
             print("GPS Ver. "+str(ver[0])+"."+str(ver[1])+"."+str(ver[2])+"."+str(ver[3]))
 
         elif tag == 1:
             print("LatitudeRef: ", end="")
             if value > 4:
                 reader.set_pos(value_offset)
-                print(reader.read_uint(value))
+                print(reader.read(value))
             else:
-                print(np.frombuffer(value_offset, dtype=endian+"u"+str(value), offset=0, count=1)[0])
+                print(value_offset)
         
         elif tag == 2:
             print("Latitude: ",end="")
@@ -86,9 +97,9 @@ def GPS(pointer, reader):
             print("LongitudeRef: ",end="")
             if value > 4:
                 reader.set_pos(value_offset)
-                print(reader.read_uint(value))
+                print(reader.read(value))
             else:
-                print(np.frombuffer(value_offset, dtype=endian+"u"+str(value), offset=0, count=1)[0])
+                print(value_offset)
 
         elif tag == 4:
             print("Longitude: ",end="")
@@ -119,9 +130,9 @@ if len(sys.argv) == 1:
 param = sys.argv[1]
 f = open(param, 'rb')
 
-jpghead = np.frombuffer(f.read(2), dtype=endian+"u"+str(2), offset=0, count=1)[0]
+jpghead = struct.unpack(endian+"H", f.read(2))[0]
 if jpghead == 0xFFD8: #JPEGヘッダの確認
-    exifhead = np.frombuffer(f.read(2), dtype=endian+"u"+str(2), offset=0, count=1)[0]
+    exifhead = struct.unpack(endian+"H", f.read(2))[0]
     if exifhead == 0xFFE1: #Exifヘッダの確認
         print("Header format is Exif.")
     elif exifhead == 0xFFE0: #JFIFヘッダの場合
@@ -137,7 +148,7 @@ f.read(8) #スキップ
 reader = Reader(f.read())
 
 #Tiffヘッダ エンディアン決定
-val = reader.read_uint(2)
+val = reader.read(2)
 if val == 0x4D4D:
     endian = ">" #BIG Endian
 elif val == 0x4949:
@@ -146,17 +157,17 @@ elif val == 0x4949:
 reader.read_skip(2)
 
 #0th IFDへのポインタ
-pointer_0th = reader.read_uint(4)
+pointer_0th = reader.read(4)
 reader.set_pos(pointer_0th)
 
 #0th IFD
-tag_n = reader.read_uint(2) #tagの総数
+tag_n = reader.read(2) #tagの総数
 gps = False
 for i in range(tag_n):
-    tag = reader.read_uint(2) #tag
-    _type = reader.read_uint(2) #type
-    value = reader.read_uint(4) #value
-    value_offset = reader.read_uint(4) #value or offset
+    tag = reader.read(2) #tag
+    _type = reader.read(2) #type
+    value = reader.read(4) #value
+    value_offset = reader.read(4) #value or offset
 
     if tag == 34853:
         #print("GPS IFD pointer")
