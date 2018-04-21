@@ -76,7 +76,8 @@ def GPS(pointer, reader):
                 en = "little"
             
             ver = np.frombuffer(value_offset.to_bytes(value, en), dtype=endian+"u1", offset=0, count=value)
-            print("GPS Ver. "+str(ver[0])+"."+str(ver[1])+"."+str(ver[2])+"."+str(ver[3]))
+            #print("GPS Ver. "+str(ver[0])+"."+str(ver[1])+"."+str(ver[2])+"."+str(ver[3]))
+            print(f"GPS Ver. {ver[0]}.{ver[1]}.{ver[2]}.{ver[3]}") # f-strings 
 
         elif tag == 1:
             print("LatitudeRef: ", end="")
@@ -136,8 +137,7 @@ if jpghead == 0xFFD8: #JPEGヘッダの確認
     if exifhead == 0xFFE1: #Exifヘッダの確認
         print("Header format is Exif.")
     elif exifhead == 0xFFE0: #JFIFヘッダの場合
-        print("Header format is JFIF. GPS infomation contains Exif format.")
-        sys.exit()
+        raise Exception("Header format is JFIF. GPS infomation contains Exif format.")
 else:
     raise Exception("This file is not JPEG.")
 
@@ -169,12 +169,13 @@ for i in range(tag_n):
     value = reader.read(4) #value
     value_offset = reader.read(4) #value or offset
 
+    current_pos = reader.get_pos()
     if tag == 34853:
         #print("GPS IFD pointer")
         print("")
-        current_pos = reader.get_pos()
         gps = GPS(value_offset, reader)
-        reader.set_pos(current_pos)
+        
+    reader.set_pos(current_pos)
 
 if not gps:
     print("GPS infomation not found.")
